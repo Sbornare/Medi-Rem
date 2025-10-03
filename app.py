@@ -1,4 +1,3 @@
-from sqlalchemy import UUID
 import torch
 from flask import Flask, redirect, request, render_template, jsonify, url_for, send_file, flash, session
 from flask_sqlalchemy import SQLAlchemy
@@ -18,8 +17,11 @@ from datetime import datetime, timedelta
 import uuid
 from gtts import gTTS
 import traceback
+import pywhatkit as pwk
 
 from model import MediRemModel  # Assuming OCRModel is defined elsewhere
+from medicine_extractor import EnhancedMedicineExtractor, extract_medicine_data  # Enhanced medicine extraction
+from whatsapp_automation import send_automatic_whatsapp, initialize_whatsapp_service, start_session_maintenance  # Automatic WhatsApp
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -43,6 +45,16 @@ login_manager.login_view = 'login'
 scheduler = BackgroundScheduler()
 scheduler.start()
 
+# Initialize WhatsApp automation service
+print("🚀 Initializing automatic WhatsApp service...")
+try:
+    # Start session maintenance in background
+    start_session_maintenance()
+    print("✅ WhatsApp service initialized successfully")
+except Exception as e:
+    print(f"⚠️ WhatsApp service initialization failed: {e}")
+    print("📱 Will use fallback method for WhatsApp notifications")
+
 # Create uploads and reminders directories if they don't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs('reminders', exist_ok=True)
@@ -55,7 +67,7 @@ num_classes = 7  # Adjust this number based on your model's requirements
 model = MediRemModel(num_classes=num_classes)
 
 # Load the checkpoint (which contains multiple components)
-checkpoint = torch.load("best_model.pth")
+checkpoint = torch.load("best_model.pth", map_location=device, weights_only=False)
 
 # Extract just the model state dict from the checkpoint
 model.load_state_dict(checkpoint['model_state_dict'])
@@ -67,7 +79,34 @@ model = model.to(device)
 model.eval()
 
 # Initialize PaddleOCR
-ocr_engine = PaddleOCR(use_angle_cls=True, lang='en')
+ocr_engine = PaddleOCR(use_textline_orientation=True, lang='en')
+
+def preprocess_image_for_ocr(image_np):
+    """Preprocess image to improve OCR accuracy"""
+    try:
+        # Convert to PIL Image for processing
+        if len(image_np.shape) == 3 and image_np.shape[2] == 3:
+            image_pil = Image.fromarray(image_np)
+        else:
+            image_pil = Image.fromarray(image_np).convert('RGB')
+        
+        # Resize image if too small (minimum 800px width for better OCR)
+        width, height = image_pil.size
+        if width < 800:
+            scale_factor = 800 / width
+            new_width = int(width * scale_factor)
+            new_height = int(height * scale_factor)
+            image_pil = image_pil.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            print(f"Resized image from {width}x{height} to {new_width}x{new_height}")
+        
+        # Convert back to numpy array
+        processed_image = np.array(image_pil)
+        
+        return processed_image
+        
+    except Exception as e:
+        print(f"Image preprocessing error: {e}")
+        return image_np  # Return original if preprocessing fails
 
 # Define the image transformation
 transform = transforms.Compose([
@@ -122,13 +161,17 @@ class UserPreferences(db.Model):
     thrice_daily_time_2 = db.Column(db.String(5), default="14:00")  # Default 2:00 PM
     thrice_daily_time_3 = db.Column(db.String(5), default="20:00")  # Default 8:00 PM
     
+    # WhatsApp notification preferences
+    whatsapp_enabled = db.Column(db.Boolean, default=False)  # Enable/disable WhatsApp notifications
+    whatsapp_phone = db.Column(db.String(20), default="")  # Phone number for WhatsApp notifications (with country code)
+    
     # Other preferences can be added here in the future
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # Regex patterns for medicine details
 medicine_pattern = re.compile(r"([a-zA-Z\s]+(?:tab|cap|tablet|capsule))\s*(\d+mg)\s*(\d+x|\d+\s*times)\s*(\d+\s*days|\d+\s*week)")
@@ -153,6 +196,66 @@ def generate_voice_reminder(text, reminder_id):
     except Exception as e:
         print(f"Error generating audio: {e}")
         return None
+
+# Function to send WhatsApp notification automatically
+def send_whatsapp_notification(phone_number, message):
+    """
+    Send WhatsApp notification automatically without manual intervention
+    Uses headless browser automation with persistent session
+    """
+    try:
+        print(f"📱 Attempting automatic WhatsApp to {phone_number}")
+        
+        # Try automatic method first
+        success = send_automatic_whatsapp(phone_number, message)
+        
+        if success:
+            print(f"✅ Automatic WhatsApp sent successfully to {phone_number}")
+            return True
+        else:
+            print(f"⚠️ Automatic method failed, trying fallback...")
+            # Fallback to pywhatkit method
+            return send_fallback_whatsapp_method(phone_number, message)
+            
+    except Exception as e:
+        print(f"❌ Error in WhatsApp notification: {str(e)}")
+        # Final fallback
+        return send_fallback_whatsapp_method(phone_number, message)
+
+def send_fallback_whatsapp_method(phone_number, message):
+    """Fallback WhatsApp method using pywhatkit for immediate sending"""
+    try:
+        # Clean and format phone number
+        clean_phone = ''.join(filter(str.isdigit, phone_number.replace('+', '')))
+        
+        # Handle Indian phone numbers
+        if len(clean_phone) == 10 and clean_phone.startswith(('6', '7', '8', '9')):
+            formatted_phone = '+91' + clean_phone
+        elif len(clean_phone) == 12 and clean_phone.startswith('91'):
+            formatted_phone = '+' + clean_phone
+        else:
+            formatted_phone = phone_number if phone_number.startswith('+') else '+' + clean_phone
+        
+        print(f"📤 Fallback: Sending to {formatted_phone}...")
+        
+        # Try immediate sending first
+        try:
+            pwk.sendwhatmsg_instantly(formatted_phone, message, wait_time=8, tab_close=True)
+            print(f"✅ Fallback WhatsApp sent immediately to {formatted_phone}")
+            return True
+        except:
+            # If immediate fails, schedule for 1 minute from now
+            send_time = datetime.now() + timedelta(minutes=1)
+            hour = send_time.hour
+            minute = send_time.minute
+            
+            pwk.sendwhatmsg(formatted_phone, message, hour, minute, wait_time=8, tab_close=True)
+            print(f"📅 Fallback WhatsApp scheduled for {hour}:{minute:02d} to {formatted_phone}")
+            return True
+        
+    except Exception as e:
+        print(f"❌ Fallback WhatsApp also failed: {str(e)}")
+        return False
 
 # Function to schedule reminders based on extracted medicine data
 def schedule_reminders(medicine_data, user_id, prescription_id=None):
@@ -311,6 +414,30 @@ def trigger_reminder(reminder_id):
             reminder.status = "active"
             db.session.commit()
             print(f"REMINDER ALERT: Take {reminder.medicine} at {reminder.reminder_time}")
+            
+            # Check if user has WhatsApp notifications enabled
+            user_prefs = UserPreferences.query.filter_by(user_id=reminder.user_id).first()
+            if user_prefs and user_prefs.whatsapp_enabled and user_prefs.whatsapp_phone:
+                # Create detailed WhatsApp message
+                current_time = datetime.now().strftime("%I:%M %p")
+                
+                message = f"""🔔 **MEDICATION REMINDER**
+
+⏰ **Time:** {current_time}
+💊 **Medicine:** {reminder.medicine}
+📋 **Dosage:** {reminder.dosage}
+🥄 **Method:** {reminder.method}
+
+⚠️ **Important:** Please take your medication as prescribed.
+
+🏥 **MediReminder** - Stay healthy, stay on track!"""
+                
+                # Send WhatsApp notification
+                success = send_whatsapp_notification(user_prefs.whatsapp_phone, message)
+                if success:
+                    print(f"✅ WhatsApp reminder sent to {user_prefs.whatsapp_phone}")
+                else:
+                    print(f"❌ Failed to send WhatsApp reminder to {user_prefs.whatsapp_phone}")
     
     return reminder_id
 
@@ -504,8 +631,40 @@ def user_settings():
             user_prefs.thrice_daily_time_2 = request.form.get('thrice_daily_time_2')
             user_prefs.thrice_daily_time_3 = request.form.get('thrice_daily_time_3')
             
+            # Update WhatsApp preferences with validation
+            whatsapp_enabled = request.form.get('whatsapp_enabled') == 'on'
+            whatsapp_phone = request.form.get('whatsapp_phone', '').strip()
+            
+            # Validate WhatsApp phone number if enabled
+            if whatsapp_enabled:
+                if not whatsapp_phone:
+                    flash('Please enter your WhatsApp phone number to enable notifications.')
+                    return redirect(url_for('user_settings'))
+                
+                # Clean and validate phone number
+                clean_phone = ''.join(filter(str.isdigit, whatsapp_phone.replace('+', '')))
+                
+                # Check for valid Indian mobile number format
+                if len(clean_phone) == 10 and clean_phone[0] in '6789':
+                    # Valid 10-digit number
+                    whatsapp_phone = f"+91{clean_phone}"
+                elif len(clean_phone) == 12 and clean_phone.startswith('91') and clean_phone[2] in '6789':
+                    # Already has country code
+                    whatsapp_phone = f"+{clean_phone}"
+                else:
+                    flash('Please enter a valid Indian mobile number (10 digits starting with 6, 7, 8, or 9).')
+                    return redirect(url_for('user_settings'))
+            
+            user_prefs.whatsapp_enabled = whatsapp_enabled
+            user_prefs.whatsapp_phone = whatsapp_phone if whatsapp_enabled else ''
+            
             db.session.commit()
-            flash('Settings updated successfully')
+            
+            # Success message with WhatsApp status
+            if whatsapp_enabled:
+                flash(f'Settings updated successfully! WhatsApp notifications enabled for {whatsapp_phone}')
+            else:
+                flash('Settings updated successfully!')
             
             # If the user chose to update existing reminders
             if request.form.get('update_existing') == 'yes':
@@ -516,8 +675,104 @@ def user_settings():
             
         except Exception as e:
             flash(f'Error updating settings: {str(e)}')
+            db.session.rollback()  # Rollback changes on error
     
     return render_template('user_settings.html', user_prefs=user_prefs)
+
+@app.route('/test_whatsapp', methods=['POST'])
+@login_required
+def test_whatsapp():
+    """Send a test WhatsApp message to verify user's phone number and automatic setup"""
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone_number', '').strip()
+        
+        if not phone_number:
+            return jsonify({'success': False, 'error': 'Phone number is required'})
+        
+        # Normalize phone number
+        phone_number = phone_number.replace(' ', '').replace('-', '')
+        if phone_number.startswith('+91'):
+            phone_number = phone_number[3:]
+        elif phone_number.startswith('91'):
+            phone_number = phone_number[2:]
+        
+        # Validate Indian mobile number
+        if not re.match(r'^[6-9][0-9]{9}$', phone_number):
+            return jsonify({'success': False, 'error': 'Invalid phone number format'})
+        
+        # Add country code
+        full_phone = f"+91{phone_number}"
+        
+        # Compose test message
+        message = f"""🧪 **MediReminder Automatic Test**
+
+Hi {current_user.username}! 👋
+
+This is an AUTOMATIC test message from your MediReminder app.
+
+✅ **No QR scanning needed!**
+✅ **No browser interaction required!**
+✅ **Fully automated WhatsApp notifications!**
+
+🔔 You'll receive medication reminders like this:
+• Medicine name and dosage
+• Precise timing reminders
+• Important prescription notes
+
+Your automatic WhatsApp notifications are working perfectly! 🎉
+
+Stay healthy! 💊
+- MediReminder Automatic System"""
+
+        # Send automatic WhatsApp message
+        success = send_whatsapp_notification(full_phone, message)
+        
+        if success:
+            return jsonify({
+                'success': True, 
+                'message': f'Automatic test message sent to {full_phone}! Check your WhatsApp.'
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'error': 'Failed to send automatic message. Please check your phone number and try again.'
+            })
+        
+    except Exception as e:
+        print(f"Test WhatsApp error: {str(e)}")
+        return jsonify({
+            'success': False, 
+            'error': f'Test failed: {str(e)}'
+        })
+
+@app.route('/initialize_whatsapp', methods=['POST'])
+@login_required
+def initialize_whatsapp():
+    """Initialize automatic WhatsApp service for the user"""
+    try:
+        print(f"🚀 User {current_user.username} initializing WhatsApp service...")
+        
+        # Initialize the automatic WhatsApp service
+        success = initialize_whatsapp_service()
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'WhatsApp service initialized successfully! Automatic notifications are now active.'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to initialize WhatsApp service. Please ensure Chrome browser is installed and try again.'
+            })
+            
+    except Exception as e:
+        print(f"WhatsApp initialization error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Initialization failed: {str(e)}'
+        })
 
 def update_existing_reminders(user_id):
     """Update the timing of existing upcoming reminders based on user preferences"""
@@ -965,27 +1220,89 @@ def predict():
         if image is None:
             return jsonify({"error": "No valid image file or URL provided."})
 
-        # Convert image to NumPy array
+        # Convert image to NumPy array and enhance for better OCR
         image_np = np.array(image)
-
-        # Perform OCR using PaddleOCR
-        ocr_results = ocr_engine.ocr(image_np, cls=True)
-
-        # Ensure OCR results are valid
-        if not ocr_results or not ocr_results[0]:
-            return jsonify({"error": "No text detected in the image."})
-
-        # Extract text from OCR results
-        extracted_text = "\n".join([line[1][0] for line in ocr_results[0]])
-
-        # Process extracted text for medicine-related data
-        extracted_medicine_data = extract_medicine_data(extracted_text)
         
-        # Create a new prescription record
+        # Preprocess image for better OCR results
+        print("Preprocessing image for enhanced OCR...")
+        image_np = preprocess_image_for_ocr(image_np)
+
+        # Perform OCR using PaddleOCR with enhanced error handling
+        try:
+            print("Starting OCR processing...")
+            
+            # Try different OCR approaches for better accuracy
+            ocr_results = None
+            extracted_text = ""
+            
+            # Method 1: Use predict method (newer API)
+            try:
+                ocr_results = ocr_engine.predict(image_np)
+                print(f"OCR predict results type: {type(ocr_results)}")
+                
+                if isinstance(ocr_results, dict) and 'text' in ocr_results:
+                    extracted_text = ocr_results['text']
+                elif isinstance(ocr_results, list) and len(ocr_results) > 0:
+                    if isinstance(ocr_results[0], list):
+                        # Standard PaddleOCR format: [[[x1,y1], [x2,y2], [x3,y3], [x4,y4]], (text, confidence)]
+                        text_lines = []
+                        for line_result in ocr_results[0]:
+                            if len(line_result) >= 2 and isinstance(line_result[1], (list, tuple)):
+                                text_content = line_result[1][0] if isinstance(line_result[1], (list, tuple)) else str(line_result[1])
+                                text_lines.append(text_content)
+                        extracted_text = "\n".join(text_lines)
+                    else:
+                        extracted_text = "\n".join([str(item) for item in ocr_results])
+                else:
+                    extracted_text = str(ocr_results) if ocr_results else ""
+                    
+                print(f"OCR method 1 extracted text length: {len(extracted_text)}")
+                
+            except Exception as predict_error:
+                print(f"OCR predict method failed: {predict_error}")
+                
+                # Method 2: Fallback to ocr method (legacy API)
+                try:
+                    ocr_results = ocr_engine.ocr(image_np)
+                    if ocr_results and isinstance(ocr_results, list) and len(ocr_results) > 0:
+                        text_lines = []
+                        for page_result in ocr_results:
+                            if page_result:  # page_result can be None for empty pages
+                                for line_result in page_result:
+                                    if len(line_result) >= 2:
+                                        text_content = line_result[1][0] if isinstance(line_result[1], (list, tuple)) else str(line_result[1])
+                                        text_lines.append(text_content)
+                        extracted_text = "\n".join(text_lines)
+                    
+                    print(f"OCR method 2 extracted text length: {len(extracted_text)}")
+                    
+                except Exception as ocr_error:
+                    print(f"OCR fallback method also failed: {ocr_error}")
+                    return jsonify({"error": f"OCR processing failed: {str(ocr_error)}"})
+            
+            print(f"Final extracted text preview: {extracted_text[:200]}...")
+                
+        except Exception as ocr_error:
+            print(f"OCR Error: {ocr_error}")
+            return jsonify({"error": f"OCR processing failed: {str(ocr_error)}"})
+
+        # Ensure we have extracted text
+        if not extracted_text or extracted_text.strip() == "":
+            return jsonify({"error": "No text detected in the image. Please ensure the image is clear and contains readable text."})
+
+        print(f"OCR completed. Extracted text length: {len(extracted_text)}")
+        
+        # Process extracted text for medicine-related data using enhanced extractor
+        print("Starting enhanced medicine extraction...")
+        extracted_medicine_data = extract_medicine_data(extracted_text)
+        print(f"Extracted {len(extracted_medicine_data)} medicines: {[med['name'] for med in extracted_medicine_data]}")
+        
+        # Store additional extracted text information for debugging
         new_prescription = Prescription(
             user_id=current_user.id,
             filename=filename,
-            extracted_text=extracted_text
+            extracted_text=extracted_text,
+            extracted_medicine_text=str(extracted_medicine_data)  # Store structured data as well
         )
         
         db.session.add(new_prescription)
@@ -1008,94 +1325,20 @@ def predict():
             "prescription_id": new_prescription.id,
             "extracted_text": extracted_text,
             "extracted_medicine_data": extracted_medicine_data,
-            "reminders_scheduled": len(scheduled_reminders)
+            "reminders_scheduled": len(scheduled_reminders),
+            "extraction_details": {
+                "total_medicines_found": len(extracted_medicine_data),
+                "ocr_text_length": len(extracted_text),
+                "processing_method": "enhanced_extractor"
+            }
         })
 
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Error fetching image from URL: {str(e)}"})
     except Exception as e:
+        print(f"General error in prescription processing: {str(e)}")
+        traceback.print_exc()
         return jsonify({"error": f"Error processing image: {str(e)}"})
-    
-       
-def extract_medicine_data(text):
-    # Process the extracted text to identify complete medicine entries
-    # Each medicine entry should include name, dosage, frequency, and duration
-    medicine_data = []
-    
-    # Define regex patterns for medicine components
-    import re
-    medicine_name_pattern = re.compile(r'(Tab|TAB|tab|Cap|CAP|cap|Syrup|SYRUP|syrup|SYP|syp|Syp|Syr|syr|SYR)\s+([A-Za-z0-9\s]+)')
-    dosage_pattern = re.compile(r'(\d+)\s*(mg|g|ml|mcg)?')
-    frequency_pattern = re.compile(r'(\d+)\s*(times a day|times|x)')
-    duration_pattern = re.compile(r'(\d+)\s*(days|day|weeks|week)')
-    
-    # Process text line by line
-    lines = text.split('\n')
-    i = 0
-    
-    while i < len(lines):
-        line = lines[i].strip()
-        medicine_match = medicine_name_pattern.search(line)
-        
-        if medicine_match:
-            # Found a medicine name
-            medicine_type = medicine_match.group(1)  # Tab, Cap, Syrup, etc.
-            medicine_name = medicine_match.group(2).strip()  # The actual name
-            full_medicine_name = f"{medicine_type} {medicine_name}"
-            
-            # Initialize medicine entry
-            medicine_entry = {
-                "name": full_medicine_name,
-                "dosage": "",
-                "frequency": "",
-                "duration": ""
-            }
-            
-            # Look for dosage in current line or next line
-            dosage_match = dosage_pattern.search(line)
-            if not dosage_match and i+1 < len(lines):
-                dosage_match = dosage_pattern.search(lines[i+1])
-                if dosage_match:
-                    i += 1  # Move to next line since we found dosage there
-            
-            if dosage_match:
-                dosage_value = dosage_match.group(1)
-                dosage_unit = dosage_match.group(2) if dosage_match.group(2) else "mg"
-                medicine_entry["dosage"] = f"{dosage_value}{dosage_unit}"
-            
-            # Look for frequency in current line or next lines
-            frequency_match = frequency_pattern.search(line)
-            if not frequency_match and i+1 < len(lines):
-                frequency_match = frequency_pattern.search(lines[i+1])
-                if frequency_match:
-                    i += 1  # Move to next line
-            
-            if frequency_match:
-                frequency_value = frequency_match.group(1)
-                medicine_entry["frequency"] = f"{frequency_value}x"
-            else:
-                medicine_entry["frequency"] = "1x"  # Default frequency
-            
-            # Look for duration in current line or next lines
-            duration_match = duration_pattern.search(line)
-            if not duration_match and i+1 < len(lines):
-                duration_match = duration_pattern.search(lines[i+1])
-                if duration_match:
-                    i += 1  # Move to next line
-            
-            if duration_match:
-                duration_value = duration_match.group(1)
-                duration_unit = duration_match.group(2)
-                medicine_entry["duration"] = f"{duration_value} {duration_unit}"
-            else:
-                medicine_entry["duration"] = "7 days"  # Default duration
-            
-            # Add complete medicine entry to the list
-            medicine_data.append(medicine_entry)
-        
-        i += 1  # Move to next line
-
-    return medicine_data
 
 # Create database tables before first request
 @app.before_request

@@ -1,0 +1,118 @@
+{
+  "common_medicines": {
+    "antibiotics": [
+      "amoxicillin", "amoxyclav", "azithromycin", "ciprofloxacin", "doxycycline", 
+      "erythromycin", "cefixime", "clarithromycin", "levofloxacin", "metronidazole",
+      "ampicillin", "cephalexin", "clindamycin", "ofloxacin", "norfloxacin",
+      "roxithromycin", "cefuroxime", "ceftriaxone", "gentamicin", "streptomycin"
+    ],
+    "pain_relievers": [
+      "paracetamol", "ibuprofen", "diclofenac", "aspirin", "tramadol", "ketorolac",
+      "aceclofenac", "nimesulide", "celecoxib", "naproxen", "piroxicam",
+      "indomethacin", "mefenamic", "etoricoxib", "valdecoxib", "rofecoxib"
+    ],
+    "fever_cold": [
+      "cetrizine", "loratadine", "phenylephrine", "chlorpheniramine", "diphenhydramine",
+      "montelukast", "levocetrizine", "fexofenadine", "desloratadine", "hydroxyzine",
+      "promethazine", "carbocisteine", "bromhexine", "ambroxol", "guaifenesin"
+    ],
+    "stomach_digestive": [
+      "omeprazole", "pantoprazole", "ranitidine", "domperidone", "ondansetron",
+      "esomeprazole", "lansoprazole", "sucralfate", "famotidine", "cimetidine",
+      "rabeprazole", "itopride", "mosapride", "metoclopramide", "simethicone"
+    ],
+    "vitamins_supplements": [
+      "calcium", "vitamin d", "vitamin d3", "vitamin b12", "vitamin c", "folic acid",
+      "iron", "zinc", "magnesium", "multivitamin", "omega 3", "vitamin e",
+      "biotin", "vitamin b complex", "vitamin b6", "vitamin k", "selenium"
+    ],
+    "diabetes": [
+      "metformin", "glimepiride", "glipizide", "insulin", "pioglitazone", "sitagliptin",
+      "voglibose", "acarbose", "repaglinide", "nateglinide", "dapagliflozin",
+      "empagliflozin", "canagliflozin", "saxagliptin", "linagliptin"
+    ],
+    "blood_pressure": [
+      "amlodipine", "atenolol", "metoprolol", "losartan", "telmisartan", "ramipril",
+      "enalapril", "nifedipine", "valsartan", "irbesartan", "olmesartan",
+      "bisoprolol", "carvedilol", "propranolol", "hydrochlorothiazide"
+    ],
+    "cholesterol": [
+      "atorvastatin", "rosuvastatin", "simvastatin", "pravastatin", "lovastatin",
+      "fluvastatin", "fenofibrate", "gemfibrozil", "ezetimibe", "nicotinic acid"
+    ],
+    "thyroid": [
+      "levothyroxine", "liothyronine", "methimazole", "propylthiouracil", "carbimazole"
+    ],
+    "mental_health": [
+      "fluoxetine", "sertraline", "escitalopram", "paroxetine", "amitriptyline",
+      "nortriptyline", "imipramine", "clomipramine", "venlafaxine", "duloxetine",
+      "mirtazapine", "bupropion", "trazodone", "alprazolam", "lorazepam",
+      "clonazepam", "diazepam", "zolpidem", "zopiclone", "quetiapine",
+      "olanzapine", "risperidone", "aripiprazole", "haloperidol", "chlorpromazine"
+    ]
+  },
+  "indian_brands": {
+    "popular_brands": [
+      "crocin", "combiflam", "dolo", "disprin", "voveran", "volini", "zincovit",
+      "becosules", "shelcal", "evion", "neurobion", "livogen", "feronia",
+      "caldikind", "ostocalcium", "supradyn", "revital", "centrum", "cobadex",
+      "follihair", "keraglo", "trichoton", "biotin forte", "selenium ace"
+    ],
+    "generic_equivalents": {
+      "crocin": "paracetamol",
+      "combiflam": "ibuprofen + paracetamol",
+      "dolo": "paracetamol",
+      "disprin": "aspirin",
+      "voveran": "diclofenac",
+      "zincovit": "multivitamin + zinc",
+      "becosules": "vitamin b complex",
+      "shelcal": "calcium + vitamin d3",
+      "evion": "vitamin e",
+      "neurobion": "vitamin b complex"
+    }
+  },
+  "dosage_forms": [
+    "tablet", "tab", "capsule", "cap", "syrup", "syr", "injection", "inj",
+    "drops", "ointment", "cream", "gel", "lotion", "spray", "inhaler",
+    "powder", "granules", "suspension", "solution", "patch", "suppository"
+  ],
+  "dosage_units": [
+    "mg", "g", "gm", "gram", "ml", "mcg", "μg", "iu", "units", "%", "mg/ml",
+    "g/100ml", "mmol", "meq", "ppm"
+  ],
+  "frequency_terms": {
+    "once_daily": ["once daily", "od", "1x daily", "once a day", "daily"],
+    "twice_daily": ["twice daily", "bd", "bid", "2x daily", "twice a day"],
+    "thrice_daily": ["thrice daily", "tid", "3x daily", "three times a day"],
+    "four_times": ["qid", "4x daily", "four times a day"],
+    "as_needed": ["prn", "as needed", "when required", "sos"]
+  },
+  "duration_terms": [
+    "days", "day", "weeks", "week", "months", "month", "years", "year",
+    "wks", "mos", "yrs", "d", "w", "m", "y"
+  ],
+  "medical_abbreviations": {
+    "od": "once daily",
+    "bd": "twice daily", 
+    "bid": "twice daily",
+    "tid": "thrice daily",
+    "qid": "four times daily",
+    "prn": "as needed",
+    "sos": "as needed",
+    "ac": "before meals",
+    "pc": "after meals",
+    "hs": "at bedtime",
+    "stat": "immediately",
+    "qod": "every other day",
+    "q4h": "every 4 hours",
+    "q6h": "every 6 hours",
+    "q8h": "every 8 hours",
+    "q12h": "every 12 hours"
+  },
+  "common_instructions": [
+    "take with food", "take on empty stomach", "take before meals", 
+    "take after meals", "take at bedtime", "swallow whole", "do not crush",
+    "dissolve in water", "shake well before use", "store in refrigerator",
+    "complete the course", "as directed by physician"
+  ]
+}

@@ -111,6 +111,68 @@
                     </div>
                 </div>
                 
+                <!-- WhatsApp Notification Settings -->
+                <div class="mb-4">
+                    <h5>📱 WhatsApp Notifications</h5>
+                    <div class="alert alert-success">
+                        <strong>🚀 FULLY AUTOMATIC WhatsApp Integration!</strong><br>
+                        <small>✅ No QR scanning needed • ✅ No browser intervention • ✅ Works seamlessly in background</small>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="whatsapp_enabled" name="whatsapp_enabled" 
+                               {% if user_prefs.whatsapp_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="whatsapp_enabled">
+                            <strong>Enable Automatic WhatsApp Notifications</strong>
+                        </label>
+                        <div class="form-text">
+                            🔔 Get instant medication reminders on WhatsApp + voice alerts for maximum reliability
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3" id="whatsapp_phone_group" style="display: none;">
+                        <label for="whatsapp_phone" class="form-label">
+                            <strong>📞 Your WhatsApp Phone Number</strong> <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text">📱</span>
+                            <input type="tel" class="form-control" id="whatsapp_phone" name="whatsapp_phone" 
+                                   value="{{ user_prefs.whatsapp_phone or '' }}" 
+                                   placeholder="+919876543210"
+                                   pattern="(\+91|91)?[6-9][0-9]{9}"
+                                   title="Enter a valid Indian mobile number">
+                        </div>
+                        <div class="form-text">
+                            <strong>Format examples:</strong><br>
+                            • <code>+919876543210</code> (with country code)<br>
+                            • <code>9876543210</code> (10-digit number - we'll add +91)<br>
+                            <small class="text-muted">⚠️ Make sure this number is registered with WhatsApp</small>
+                        </div>
+                        
+                        <div class="alert alert-success mt-2" style="font-size: 0.9em;">
+                            <strong>🎉 How Automatic WhatsApp Works:</strong><br>
+                            1️⃣ <strong>No Setup Needed:</strong> Just enable and enter your number<br>
+                            2️⃣ <strong>Automatic Delivery:</strong> Messages open instantly in WhatsApp<br>
+                            3️⃣ <strong>Multiple Methods:</strong> Click-to-chat, desktop app, or web interface<br>
+                            4️⃣ <strong>Pre-filled Messages:</strong> Just click "Send" to deliver<br>
+                            5️⃣ <strong>Smart Fallbacks:</strong> Always finds a way to reach you!
+                        </div>
+                    </div>
+                    
+                    <!-- Test WhatsApp Button -->
+                    <div id="whatsapp_test_section" style="display: none;">
+                        <div class="d-flex gap-2 mb-2">
+                            <button type="button" class="btn btn-success btn-sm" id="test_whatsapp_btn">
+                                🧪 Test Automatic WhatsApp
+                            </button>
+                        </div>
+                        <div class="alert alert-info mt-2" style="font-size: 0.85em;">
+                            <strong>� Testing:</strong> Click test button to see how automatic WhatsApp works!<br>
+                            The message will open instantly in WhatsApp - just click Send to complete delivery.
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="mb-4">
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" value="yes" id="update_existing" name="update_existing">
@@ -134,4 +196,192 @@
         </div>
     </div>
 </div>
+
+<script>
+// Toggle WhatsApp phone number field visibility
+document.addEventListener('DOMContentLoaded', function() {
+    const whatsappEnabled = document.getElementById('whatsapp_enabled');
+    const phoneGroup = document.getElementById('whatsapp_phone_group');
+    
+    function togglePhoneField() {
+        if (whatsappEnabled.checked) {
+            phoneGroup.style.display = 'block';
+        } else {
+            phoneGroup.style.display = 'none';
+        }
+    }
+    
+    // Set initial state
+    togglePhoneField();
+    
+    // Add event listener
+    whatsappEnabled.addEventListener('change', togglePhoneField);
+});
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // WhatsApp settings functionality
+    const whatsappCheckbox = document.getElementById('whatsapp_enabled');
+    const whatsappPhoneGroup = document.getElementById('whatsapp_phone_group');
+    const whatsappTestSection = document.getElementById('whatsapp_test_section');
+    const whatsappPhoneInput = document.getElementById('whatsapp_phone');
+    
+    function toggleWhatsAppFields() {
+        if (whatsappCheckbox.checked) {
+            whatsappPhoneGroup.style.display = 'block';
+            whatsappTestSection.style.display = 'block';
+            whatsappPhoneInput.required = true;
+        } else {
+            whatsappPhoneGroup.style.display = 'none';
+            whatsappTestSection.style.display = 'none';
+            whatsappPhoneInput.required = false;
+        }
+    }
+    
+    // Initial toggle state
+    if (whatsappCheckbox) {
+        toggleWhatsAppFields();
+        whatsappCheckbox.addEventListener('change', toggleWhatsAppFields);
+    }
+    
+    // Format phone number input
+    if (whatsappPhoneInput) {
+        whatsappPhoneInput.addEventListener('input', function() {
+            let value = this.value.replace(/\D/g, ''); // Remove non-digits
+            
+            // If it starts with 91 and has more than 12 digits, remove leading 91
+            if (value.startsWith('91') && value.length > 12) {
+                value = value.substring(2);
+            }
+            
+            // Limit to 10 digits for Indian numbers
+            if (value.length > 10) {
+                value = value.substring(0, 10);
+            }
+            
+            // Format display
+            if (value.length === 10 && value.startsWith('9') || value.startsWith('8') || 
+                value.startsWith('7') || value.startsWith('6')) {
+                this.value = '+91' + value;
+            } else if (value.length <= 10) {
+                this.value = value;
+            }
+        });
+    }
+    
+    // Initialize automatic WhatsApp functionality
+    const initWhatsAppBtn = document.getElementById('init_whatsapp_btn');
+    if (initWhatsAppBtn) {
+        initWhatsAppBtn.addEventListener('click', function() {
+            this.disabled = true;
+            this.innerHTML = '⏳ Initializing...';
+            
+            fetch('/initialize_whatsapp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ ' + data.message + '\n\nYou can now send automatic WhatsApp reminders!');
+                    this.innerHTML = '✅ Initialized';
+                    this.classList.remove('btn-outline-primary');
+                    this.classList.add('btn-success');
+                } else {
+                    alert('❌ Initialization failed: ' + (data.error || 'Unknown error'));
+                    this.disabled = false;
+                    this.innerHTML = '🚀 Initialize Auto WhatsApp';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('❌ Error during initialization. Please try again.');
+                this.disabled = false;
+                this.innerHTML = '🚀 Initialize Auto WhatsApp';
+            });
+        });
+    }
+    
+    // Test WhatsApp functionality
+    const testWhatsAppBtn = document.getElementById('test_whatsapp_btn');
+    if (testWhatsAppBtn) {
+        testWhatsAppBtn.addEventListener('click', function() {
+            const phoneNumber = whatsappPhoneInput.value.trim();
+            
+            if (!phoneNumber) {
+                alert('Please enter your WhatsApp phone number first.');
+                whatsappPhoneInput.focus();
+                return;
+            }
+            
+            // Validate phone number format
+            const phoneRegex = /^(\+91|91)?[6-9][0-9]{9}$/;
+            if (!phoneRegex.test(phoneNumber.replace(/\s+/g, ''))) {
+                alert('Please enter a valid Indian mobile number (10 digits starting with 6-9).');
+                whatsappPhoneInput.focus();
+                return;
+            }
+            
+            this.disabled = true;
+            this.innerHTML = '⏳ Sending...';
+            
+            // Send test message via AJAX
+            fetch('/test_whatsapp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    phone_number: phoneNumber
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Test message sent successfully! Check your WhatsApp.');
+                } else {
+                    alert('❌ Failed to send test message: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('❌ Error sending test message. Please try again.');
+            })
+            .finally(() => {
+                this.disabled = false;
+                this.innerHTML = '🧪 Send Test Message';
+            });
+        });
+    }
+    
+    // Form validation before submit
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            if (whatsappCheckbox.checked) {
+                const phoneNumber = whatsappPhoneInput.value.trim();
+                if (!phoneNumber) {
+                    e.preventDefault();
+                    alert('Please enter your WhatsApp phone number to enable WhatsApp notifications.');
+                    whatsappPhoneInput.focus();
+                    return false;
+                }
+                
+                const phoneRegex = /^(\+91|91)?[6-9][0-9]{9}$/;
+                if (!phoneRegex.test(phoneNumber.replace(/\s+/g, ''))) {
+                    e.preventDefault();
+                    alert('Please enter a valid Indian mobile number (10 digits starting with 6-9).');
+                    whatsappPhoneInput.focus();
+                    return false;
+                }
+            }
+        });
+    }
+});
+</script>
 {% endblock %}
