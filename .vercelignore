@@ -1,0 +1,53 @@
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Model files (too large for Vercel)
+best_model.pth
+*.pth
+*.pt
+
+# Large dependencies
+model.py
+medicine_extractor.py
+whatsapp_automation.py
+
+# Logs
+*.log
+prescription_process.log
+
+# OCR cache
+ocr_cache/
+
+# Large audio files
+reminders/
+*.mp3
+*.wav
+
+# Database files
+*.db
+instance/
+
+# Upload files
+uploads/
+temp/
+
+# Results
+results_*/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
