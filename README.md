@@ -10,7 +10,7 @@ The **Voice-enabled Medicine Reminder** is a Flask-based AI-powered application 
 - **Medicine & Dosage Detection:** Identifies medicine names, dosages, and frequencies using regex.
 - **Automated Reminders:** Schedules medicine intake reminders based on the extracted information.
 - **Flask API Endpoints:** Provides RESTful APIs for image upload and text extraction.
-- **Scheduler Integration:** Uses `APScheduler` to trigger reminders at set intervals.
+- **Scheduler Integration:** Uses `APScheduler` to trigger reminders at set intervals on whatsapp.
 - **Device Compatibility:** Supports CPU and GPU (CUDA-enabled for PyTorch models).
 
 ---
@@ -104,7 +104,6 @@ http://127.0.0.1:5000/
 
 ## 📜 Future Enhancements
 ✅ Integrate with Google Home & Alexa for voice reminders 🔊  
-✅ Add SMS or WhatsApp notification support 📲  
 ✅ Implement user authentication & medicine history tracking 🔐
 
 ---
@@ -117,16 +116,4 @@ Feel free to contribute! Follow these steps:
 4. Push to your branch (`git push origin feature-xyz`)
 5. Open a Pull Request 🚀
 
----
-
-## 📜 License
-This project is licensed under the **MIT License**.
-
----
-
-## 📞 Contact
-For queries or collaboration, reach out to:  
-📧 Email: harshbothara24@gmail.com  
-🐦 Twitter: https://x.com/HarshBothara24  
-💼 LinkedIn: https://www.linkedin.com/in/harshbothara24/
 
